@@ -1,0 +1,3 @@
+
+class PebkacException(Exception):
+    pass
