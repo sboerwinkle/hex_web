@@ -92,7 +92,7 @@ class TaskQueue:
 
 class MillisTaskQueue(TaskQueue):
     "TaskQueue that manages its own running by tying the tasks' time to real-world milliseconds"
-    def __init__(self, callback, sec_per_turns=0.1):
+    def __init__(self, callback, sec_per_turn=0.001):
         self.callback = callback
         self.sec_per_turn = sec_per_turn
         self.async_task = None

@@ -29,24 +29,27 @@ class VersionedTile(Tile):
         super().__init__()
 
 class Player:
-    def __init__(self, lobby, socket):
+    def __init__(self, lobby, socket, name):
         self.lobby = lobby
         self.outgoing_queue = asyncio.Queue()
         self.outgoing_task = asyncio.create_task(send_outgoing(self.outgoing_queue, socket))
-        i=1
-        while True:
-            name = f"Player {i}"
-            for p in lobby.players:
-                if p.name == name:
+        if not name:
+            i=1
+            while True:
+                name = f"Player {i}"
+                for p in lobby.players:
+                    if p.name == name:
+                        break
+                else:
+                    self.name = name
                     break
-            else:
-                self.name = name
-                break
-            i += 1
+                i += 1
+        self.name = name
         lobby.players.append(self)
         self.lobby.broadcast(f">>> {self.name} joined")
         self.status = ""
         self.client_board = Board(tile_offset = None, tile_type = VersionedTile)
+        self.board_layout = None
         if self.lobby.game == None:
             self.character = None
         else:
@@ -79,36 +82,46 @@ class Player:
                 old_board.max_y - old_board.min_y + 2,
                 VersionedTile
             )
-        self.character.draw_to_board(new_board)
+        send_me = {}
+        new_board_layout = self.character.draw_to_board(new_board) # TODO must actually return the layout lololololol
+        if new_board_layout != self.board_layout:
+            self.board_layout = new_board_layout
+            send_me['layout'] = new_board_layout
+            # Specifying the layout also clears the board client-side, (TODO this)
+            # since usually it doesn't make sense to even use the same
+            # sprites if the layout is changing
+            old_board = Board(tile_offset = None, tile_type = VersionedTile) # TODO This is used like 3x, make into a fn
         old_bounds = ((old_board.min_x, old_board.min_y), (old_board.max_x, old_board.max_y))
         new_bounds = ((new_board.min_x, new_board.min_y), (new_board.max_x, new_board.max_y))
-        if old_board.min_x == None:
-            if new_board.min_x == None:
-                return
-            old_bounds = new_bounds
-        elif new_board.min_x == None:
+        if old_board.min_x is None:
+            if new_board.min_x is not None:
+                old_bounds = new_bounds
+        elif new_board.min_x is None:
             new_bounds = old_bounds
         updates = []
-        for x in range(min(old_bounds[0][0], new_bounds[0][0]), max(old_bounds[1][0], new_bounds[1][0])):
-            for y in range(min(old_bounds[0][1], new_bounds[0][1]), max(old_bounds[1][1], new_bounds[1][1])):
-                old_tile = old_board.get_tile((x,y))
-                new_tile = new_board.get_tile((x,y))
-                l1 = len(old_tile.contents)
-                l2 = len(new_tile.contents)
-                if l2 > 0:
-                    new_tile.version = old_tile.version
-                i = 0
-                while i < l1 and i < l2:
-                    if old_tile.contents[i] != new_tile.contents[i]:
-                        break
-                    i += 1
-                if l1 == l2 and i == l1:
-                    continue # Everything was the same
-                updates.append({"x":x,"y":y,"ver":old_tile.version,"keep":i,"add":new_tile.contents[i:]})
-                if l2 > 0:
-                    new_tile.version = int(not new_tile.version)
-        if len(updates) > 0:
-            self.send_dict({"type":"arena", "items":updates})
+        if old_bounds[0][0] is not None:
+            for x in range(min(old_bounds[0][0], new_bounds[0][0]), max(old_bounds[1][0], new_bounds[1][0])):
+                for y in range(min(old_bounds[0][1], new_bounds[0][1]), max(old_bounds[1][1], new_bounds[1][1])):
+                    old_tile = old_board.get_tile((x,y))
+                    new_tile = new_board.get_tile((x,y))
+                    l1 = len(old_tile.contents)
+                    l2 = len(new_tile.contents)
+                    if l2 > 0:
+                        new_tile.version = old_tile.version
+                    i = 0
+                    while i < l1 and i < l2:
+                        if old_tile.contents[i] != new_tile.contents[i]:
+                            break
+                        i += 1
+                    if l1 == l2 and i == l1:
+                        continue # Everything was the same
+                    updates.append({"x":x,"y":y,"ver":old_tile.version,"keep":i,"add":new_tile.contents[i:]})
+                    if l2 > 0:
+                        new_tile.version = int(not new_tile.version)
+        if updates or send_me:
+            send_me['type'] = 'arena'
+            send_me['items'] = updates
+            self.send_dict(send_me)
             self.client_board = new_board
 
 
@@ -151,10 +164,15 @@ class Lobby:
 lobby_dict = {}
 
 async def connection_handler(websocket, path):
+    message = await websocket.recv()
+    if message[:6] != '/name ':
+        print(f"First message was not '/name ...', closing socket. Got '{message}'")
+        await websocket.close()
+        return
     if path not in lobby_dict:
         lobby_dict[path] = Lobby()
     lobby = lobby_dict[path]
-    player = Player(lobby, websocket)
+    player = Player(lobby, websocket, message[6:])
     # Register player in lobby, make task for sending stuff out on the websocket
     try:
         # websocket.send(str)
@@ -172,7 +190,7 @@ async def connection_handler(websocket, path):
                     elif (message + ' ')[:7] == '/lobby ':
                         await lobby.exit_game(player)
                     elif (message + ' ')[:6] == '/game ':
-                        lobby.start_game(player, (message+' ')[6:].trim())
+                        lobby.start_game(player, (message+' ')[6:].strip())
                     elif player.character != None:
                         lobby.game.process_command(player.character, message)
                     elif (message + ' ')[:6] == '/help ':

@@ -37,9 +37,10 @@ class Game:
 # Network issues, save/load, swapping seats, etc.
 # Neither is especially concerned with the impl of the other, though they will have some interface.
 class Character:
-    def __init__(self, game, player = None):
+    def __init__(self, game, player, layout):
         self.game = game
         self.player = player
+        self.layout = layout
     def step_complete(self):
         if self.player != None:
             self.player.do_frame()
@@ -49,6 +50,7 @@ class Character:
             for cell in col:
                 for ent in cell.contents:
                     ent.draw(self, out_board)
+        return self.layout
 
 class Ent:
     def __init__(self, game, pos):

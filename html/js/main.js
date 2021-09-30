@@ -28,6 +28,13 @@ function getOffset(evt) {
 
 
 let board = {};
+// Control the translation from board coords to screen coords.
+// Defaults here correspond to a hex grid, but are largely irrelevant since the first
+// message should include "layout" which will overwrite them
+let x_step = 50; // Distance sideways to next tile
+let y_step = 43; // Distance vertically to next row
+let row_shift = 25; // How much each subsequent row is shifted, e.g. x_step/2 for a hex grid
+let y_offset = 7; // How far down the sprite the button "visually" starts; this applies to hex grids since the image encompasses the whole hex, but the clickable area is a rectangle (and as such isn't the entire vertical height)
 
 function Tile() {
 	this.version = -1;
@@ -52,11 +59,25 @@ function make_img_tag(x, y, z, src) {
 	let tag = document.createElement('img');
 	let style = tag.style;
 	style.position = 'absolute';
-	style.left = (50*x + 25*y) + "px";
-	style.top = (43*y) + "px";
+	style.left = (x_step*x + row_shift*y) + "px";
+	style.top = (y_step*y) + "px";
 	style.zIndex = z;
 	tag.src = "assets/" + src + ".png";
 	return tag;
+}
+
+function reset_board() {
+	for (let x in board) {
+		let col = board[x];
+		for (let y in col) {
+			let tile = col[y];
+			for (let tag of tile.things) {
+				arena.removeChild(tag);
+			}
+		}
+	}
+	// Spares us having to `delete` each tile and col individually
+	board = {};
 }
 
 function update_tile(x, y, version, to_keep, new_items) {
@@ -88,6 +109,14 @@ function process_message(event) {
 		text_area.value = obj.msg + "\n" + text_area.value;
 		// text_area.scrollTop = text_area.scrollHeight;
 	} else if (obj.type == "arena") {
+		if (obj.layout) {
+			reset_board();
+			let layout = obj.layout
+			x_step = layout[0];
+			y_step = layout[1];
+			row_shift = layout[2];
+			y_offset = layout[3];
+		}
 		for (let item of obj.items) {
 			update_tile(item.x, item.y, item.ver, item.keep, item.add);
 		}
@@ -113,16 +142,19 @@ function handle_close(event) {
 let ws = new WebSocket(`ws://${window.location.hostname}:15000`);
 ws.onmessage = process_message;
 ws.onclose = handle_close;
+ws.onopen = () => { ws.send("/name " + (localStorage.name || "")); }
 
 document.getElementById('form').onsubmit = function () {
-	ws.send(input_area.value);
+	const msg = input_area.value;
 	input_area.value = "";
+	if (msg.startsWith("/name ")) localStorage.name = msg.substring(6)
+	ws.send(msg);
 	return false; // Do not reload page
 }
 
 arena.onclick = function(evt) {
 	let offset = getOffset(evt);
-	let tile_y = Math.floor((offset.y - 7) / 43);
-	let tile_x = Math.floor((offset.x - 25*tile_y) / 50);
+	let tile_y = Math.floor((offset.y - y_offset) / y_step);
+	let tile_x = Math.floor((offset.x - row_shift*tile_y) / x_step);
 	ws.send(`/click ${tile_x} ${tile_y}`);
 }

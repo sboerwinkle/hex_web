@@ -1,6 +1,10 @@
 from .. import wait, tasks
 from ..game import *
 
+# Basic hex layout (x step, y step, row shift, y offset)
+# (The last being because the tip top of the sprite is above the clickable area)
+layout = (50, 43, 25, 7)
+
 class GrowGame(Game):
     def __init__(self):
         super().__init__()
@@ -66,13 +70,13 @@ class GrowGame(Game):
 class GrowCharacter(Character):
     def __init__(self, *a, **kwa):
         self.coins = 6
-        super().__init__(*a, **kwa)
+        super().__init__(*a, layout = layout, **kwa)
         if self.player != None:
             self.player.whisper_raw(">>> Click on the board to get started!")
     def draw_to_board(self, out_board):
         # Coin emoji
         self.player.set_status(f"\U0001FA99{self.coins}")
-        super().draw_to_board(out_board)
+        return super().draw_to_board(out_board)
 
 class MagentaPlant(Ent):
     def __init__(self, delay, *a, **kwa):
