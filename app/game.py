@@ -6,9 +6,7 @@ class Game:
         self.characters = []
         self.board = Board(tile_type = WatchyTile)
     def seat_player(self, player):
-        new_char = Character(self, player)
-        self.characters.append(new_char)
-        return new_char
+        self.characters.append(Character(self, player))
     def process_command(self, char, cmd):
         # This will be moved elsewhere eventually, to a subclass or something
         bits = cmd.split()
@@ -39,8 +37,13 @@ class Game:
 class Character:
     def __init__(self, game, player, layout):
         self.game = game
-        self.player = player
         self.layout = layout
+        self.player = None
+        self.set_player(player)
+    def set_player(self, p):
+        self.player = p
+        if p is not None:
+            p.set_char(self)
     def step_complete(self):
         if self.player != None:
             self.player.do_frame()
@@ -57,6 +60,7 @@ class Ent:
         self.game = game
         self.board = game.board
         self.pos = pos
+        self.board.require_tile(pos).add(self)
     def draw(self, char, out_board):
         pass
     # TODO Maybe some standard way to get qualitative information about what it is???
@@ -65,6 +69,10 @@ class Ent:
         self.board.get_tile(self.pos).rm(self)
         self.game = None
         self.board = None
+    def move(self, pos):
+        self.board.get_tile(self.pos).rm(self)
+        self.board.require_tile(pos).add(self)
+        self.pos = pos
 
 class SpriteEnt(Ent):
     def __init__(self, sprite, *a, **kwa):

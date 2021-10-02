@@ -1,3 +1,21 @@
+class SingletonScheduler:
+    def __init__(self, q, l, delay, patience):
+        self.q = q
+        self.l = l
+        self.delay = delay
+        self.patience = patience
+        self.queued = False
+    def f(self):
+        self.queued = False
+        self.l()
+    def __call__(self):
+        if self.queued:
+            return
+        self.queued = True
+        self.q.schedule(self.f, self.delay, self.patience)
+
+# TODO Everything past this point is nice and theoretical, but never got finished
+
 # I'm aiming to build out a modular system for defining actions and behaviors.
 # Broadly, there are:
 # - Actions which are taken "immediately". These are pretty much just functions, they know they're going to run.
@@ -28,7 +46,7 @@ class ResolutionGuard:
     (no sets that way)
     """
 
-class SingleGuard(ent, sched_lambda):
+class SingleGuard:
     """
     A callable which wraps the provided scheduling lambda.
     Tasks scheduled this way ensure that only one is scheduled at a time

@@ -109,6 +109,7 @@ function process_message(event) {
 		text_area.value = obj.msg + "\n" + text_area.value;
 		// text_area.scrollTop = text_area.scrollHeight;
 	} else if (obj.type == "arena") {
+		//text_area.value = "ping\n" + text_area.value;
 		if (obj.layout) {
 			reset_board();
 			let layout = obj.layout

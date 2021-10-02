@@ -95,18 +95,16 @@ class MillisTaskQueue(TaskQueue):
     def __init__(self, callback, sec_per_turn=0.001):
         self.callback = callback
         self.sec_per_turn = sec_per_turn
-        self.async_task = None
+        # Dummy task which immediately returns, just so we don't have to do `None` checks
+        self.async_task = asyncio.create_task(asyncio.sleep(0))
         # Get current time as "0"
         self.zero_time = monotonic()
         super().__init__()
-    async def loop(self, old):
-        if old != None:
-            await asyncio.gather(old, return_exceptions=True)
+    async def loop(self):
         try:
             while True:
                 next_time = self.next_time()
                 if (next_time == inf):
-                    self.async_task = None
                     return
 
                 self.zero_time = await wait.until(self.zero_time + next_time*self.sec_per_turn)
@@ -127,14 +125,10 @@ class MillisTaskQueue(TaskQueue):
         next_time = self.next_time()
         super().schedule(func, delay, patience)
         if delay < next_time:
-            old = self.async_task
-            if old != None:
-                old.cancel()
-            self.async_task = asyncio.create_task(self.loop(old))
-    async def cancel(self):
-        if self.async_task != None:
             self.async_task.cancel()
-            await asyncio.gather(self.async_task, return_exceptions=True)
+            self.async_task = asyncio.create_task(self.loop())
+    async def cancel(self):
+        self.async_task.cancel()
 
 class Task:
     def __init__(self, func, time=0, patience=0):

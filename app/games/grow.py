@@ -12,9 +12,7 @@ class GrowGame(Game):
     async def cleanup(self):
         await self.task_queue.cancel()
     def seat_player(self, player):
-        new_char = GrowCharacter(self, player)
-        self.characters.append(new_char)
-        return new_char
+        self.characters.append(GrowCharacter(self, player))
     def process_command(self, char, cmd):
         bits = cmd.split()
         if bits[0] == "/mag_pl":
@@ -29,7 +27,7 @@ class GrowGame(Game):
             if not has_grass:
                 raise PebkacException("Nothing plantable there!")
             delay = int(bits[3]) if len(bits) > 3 else 2000
-            tile.add(MagentaPlant(delay, self, pos))
+            MagentaPlant(delay, self, pos)
             self.step_complete()
             return
         if bits[0] == "/click":
@@ -52,13 +50,12 @@ class GrowGame(Game):
                 if char.coins < 1:
                     raise PebkacException("Planting costs a coin!")
                 char.coins -= 1
-                tile.add(MagentaPlant(2000, self, pos))
+                MagentaPlant(2000, self, pos)
             else:
-                tile = self.board.require_tile(pos)
                 if char.coins < 5:
                     raise PebkacException("Creating land costs 5 coins!")
                 char.coins -= 5
-                tile.add(SpriteEnt("grass", self, pos))
+                SpriteEnt("grass", self, pos)
             self.step_complete()
             return
         if bits[0] == "/coins":
