@@ -31,9 +31,18 @@ class Board:
 
         # Should always be initialized with at least 1 tile, so len(board[0]) is valid
         self.tile_type = tile_type
+        self.filler = tile_type()
+        self.reset(tile_offset, width, height)
+
+    def reset(self, tile_offset=(0,0), width=1, height=1):
+        """
+        Note this doesn't empty out the tiles as much as
+        allocate a new board, so e.g. existing entities
+        will not see themselves as being removed from
+        anything
+        """
         self.tile_offset = tile_offset
         self.board = [self.mk_tile_list(height) for i in range(width)]
-        self.filler = tile_type()
 
         self.min_x = None
         self.min_y = None

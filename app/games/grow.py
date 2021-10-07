@@ -27,8 +27,7 @@ class GrowGame(Game):
             if not has_grass:
                 raise PebkacException("Nothing plantable there!")
             delay = int(bits[3]) if len(bits) > 3 else 2000
-            MagentaPlant(delay, self, pos)
-            self.step_complete()
+            Move(MagentaPlant(delay, self), pos).sched(self.task_queue)
             return
         if bits[0] == "/click":
             pos = (int(bits[1]), int(bits[2]))
@@ -44,19 +43,18 @@ class GrowGame(Game):
             if plant != None:
                 if plant.stage != 3:
                     raise PebkacException("Not ready for harvest!")
-                plant.destroy()
+                Destroy(plant).sched(self.task_queue)
                 char.coins += 2
             elif has_grass:
                 if char.coins < 1:
                     raise PebkacException("Planting costs a coin!")
                 char.coins -= 1
-                MagentaPlant(2000, self, pos)
+                Move(MagentaPlant(2000, self), pos).sched(self.task_queue)
             else:
                 if char.coins < 5:
                     raise PebkacException("Creating land costs 5 coins!")
                 char.coins -= 5
-                SpriteEnt("grass", self, pos)
-            self.step_complete()
+                Move(SpriteEnt("grass", self), pos).sched(self.task_queue)
             return
         if bits[0] == "/coins":
             char.coins = int(bits[1])

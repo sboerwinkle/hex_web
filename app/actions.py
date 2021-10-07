@@ -1,3 +1,5 @@
+from . import tasks
+
 class SingletonScheduler:
     def __init__(self, q, l, delay, patience):
         self.q = q

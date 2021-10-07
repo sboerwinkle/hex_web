@@ -160,7 +160,14 @@ class Lobby:
             self.game = GrowGame()
         for p in self.players:
             self.game.seat_player(p)
+        self.game.begin()
 lobby_dict = {}
+
+def print_help(player):
+    player.whisper_raw('... Available server-level commands are:')
+    player.whisper_raw('... /game        - start a game')
+    player.whisper_raw('... /lobby       - stop the game')
+    player.whisper_raw('... /name [name] - set your name')
 
 async def connection_handler(websocket, path):
     message = await websocket.recv()
@@ -184,20 +191,20 @@ async def connection_handler(websocket, path):
                 else:
                     if message == '/foo':
                         lobby.foo()
-                    elif message[:6] == '/name ':
+                    elif message.startswith('/name '):
                         player.rename(message[6:])
-                    elif (message + ' ')[:7] == '/lobby ':
+                    elif message == '/lobby':
                         await lobby.exit_game(player)
-                    elif (message + ' ')[:6] == '/game ':
+                    elif (message + ' ').startswith('/game '):
                         lobby.start_game(player, (message+' ')[6:].strip())
+                    elif message == '/shelp':
+                        print_help(player)
                     elif player.character != None:
+                        if message == '/help':
+                            player.whisper_raw('... (use /shelp for server-level commands)')
                         lobby.game.process_command(player.character, message)
-                    elif (message + ' ')[:6] == '/help ':
-                        # Currently messages are printed in reverse. Maybe fix this?
-                        player.whisper_raw('... /name [name] - set your name')
-                        player.whisper_raw('... /lobby       - stop the game')
-                        player.whisper_raw('... /game        - start a game')
-                        player.whisper_raw('... Available server-level commands are:')
+                    elif message == '/help':
+                        print_help(player)
                     else:
                         player.whisper_raw('!!! Unknown command (no game in progress)')
             except Exception as e:
@@ -220,5 +227,6 @@ async def connection_handler(websocket, path):
 # TODO Port is a program arg
 # This code taken from the websockets tutorial, is there any less-ugly way to do this?
 loop = asyncio.get_event_loop()
+print("Init complete, entering websocket loop")
 loop.run_until_complete(websockets.serve(connection_handler, port=15000))
 loop.run_forever()

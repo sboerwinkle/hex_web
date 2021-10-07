@@ -106,8 +106,11 @@ function process_message(event) {
 	if (obj.type == "foo") {
 		alert("woah");
 	} else if (obj.type == "text") {
-		text_area.value = obj.msg + "\n" + text_area.value;
-		// text_area.scrollTop = text_area.scrollHeight;
+		// MDN has some caveat where scrollTop might not be an integer in some cases.
+		// I've never run into an issue with this, but I'd rather just be extra careful.
+		const scrolling = Math.abs(text_area.scrollTop + text_area.clientHeight - text_area.scrollHeight) < 1;
+		text_area.value = text_area.value + "\n" + obj.msg;
+		if (scrolling) text_area.scrollTop = text_area.scrollHeight; // Clamps to maximum sensible value
 	} else if (obj.type == "arena") {
 		//text_area.value = "ping\n" + text_area.value;
 		if (obj.layout) {
