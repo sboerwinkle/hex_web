@@ -6,8 +6,8 @@ from ..game import *
 layout = (50, 43, 25, 7)
 
 class GrowGame(Game):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *a, **kwa):
+        super().__init__(*a, **kwa)
         self.task_queue = tasks.MillisTaskQueue(self.step_complete)
     async def cleanup(self):
         await self.task_queue.cancel()

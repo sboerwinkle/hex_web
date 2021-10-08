@@ -153,11 +153,11 @@ class Lobby:
             raise PebkacException("Game already in progress!")
         self.broadcast(f">>> Game was started by {player.name} (/game)")
         if args == 'tend':
-            self.game = TendGame()
+            self.game = TendGame(self)
         elif args == 'path':
-            self.game = PathGame()
+            self.game = PathGame(self)
         else:
-            self.game = GrowGame()
+            self.game = GrowGame(self)
         for p in self.players:
             self.game.seat_player(p)
         self.game.begin()

@@ -3,7 +3,8 @@ from .common import *
 from . import tasks
 
 class Game:
-    def __init__(self):
+    def __init__(self, lobby):
+        self.lobby = lobby
         self.characters = []
         self.board = Board(tile_type = WatchyTile)
     def seat_player(self, player):
