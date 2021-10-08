@@ -15,7 +15,14 @@ path_symbols = {
         'd': ( 1,  0)
 }
 
-teams = ("red", "green", "blue", "yellow", "black", "magenta")
+teams = (
+    ("red", "\U0001F7E5"),
+    ("green", "\U0001F7E9"),
+    ("blue", "\U0001F7E6"),
+    ("yellow", "\U0001F7E8"),
+    ("black", "\U00002B1B"),
+    ("purple", "\U0001F7EA"),
+)
 
 def decode_path_symbol(sym):
     try:
@@ -45,7 +52,7 @@ class PathGame(Game):
                 if c.team == team:
                     break
             else:
-                player.whisper_raw(f">>> You are {team}")
+                player.whisper_raw(f">>> You are {team[0]} {team[1]}")
                 self.characters.append(PathCharacter(team, self, player))
                 return
         player.whisper_raw(f"!!! Sorry, no more than {len(teams)} players are supported, you were not added to the game")
@@ -150,21 +157,38 @@ class PathGame(Game):
             c.avatar_spawn_writeop(l.pop(rng.randint(0, len(l)-1)))._run()
         self.step_complete()
 
+    def check_round_over(self):
+        for c in self.characters:
+            if c.instructions is not None:
+                return
+        self.task_queue.schedule(self.finish_round, 0, tasks.ACT_PATIENCE)
+    def finish_round(self):
+        round_scores = [c.score - c.prev_score for c in self.characters]
+        max_score = max(round_scores)
+        for c in self.characters:
+            c.pity_points += max_score + c.prev_score - c.score
+
 class PathCharacter(Character):
     def __init__(self, team, *a, **kwa):
         self.team = team
+        self.score = 0
+        self.pity_points = 0
         super().__init__(*a, layout = layout, **kwa)
 
         self.avatar = None
         self.instructions = None
     def avatar_spawn_writeop(self, pos):
         self.instructions = None
+        self.score += 1 # For initial space, makes the math more obvious when looking at it
+        self.prev_score = self.score
         self.avatar = SpriteEnt("sq_face_1", self.game)
         return WriteAll(
-            Move(SpriteEnt("sq_" + self.team, self.game), pos),
+            Move(SpriteEnt("sq_" + self.team[0], self.game), pos),
             Move(self.avatar, pos),
         )
-    # Default impl of draw_to_board is fine, literally nothing special / of interest is going on per-player
+    def draw_to_board(self, out_board):
+        self.player.set_status(' '.join([f"{c.team[1]}{c.score}({c.pity_points})\xA0\xA0\xA0\xA0" for c in self.game.characters]))
+        return super().draw_to_board(out_board)
     def set_player(self, p):
         if p is None:
             if self.player is not None:
@@ -175,7 +199,8 @@ class PathCharacter(Character):
     def step(self):
         if 0 == len(self.instructions):
             self.instructions = None
-            # TODO incr coins for successful path completion
+            self.game.check_round_over()
+            self.score += 1
             return
         instr = self.instructions.pop(0)
         new_pos = vec.add(self.avatar.pos, instr)
@@ -183,7 +208,7 @@ class PathCharacter(Character):
             self.destroy_avatar()
             return
 
-        new_square = SpriteEnt("sq_" + self.team, self.game)
+        new_square = SpriteEnt("sq_" + self.team[0], self.game)
         self.movement = WithClaim(
             self.game,
             new_pos,
@@ -194,11 +219,12 @@ class PathCharacter(Character):
 
     def verify_move(self):
         if self.movement.success:
-            # TODO incr coins for successful move
+            self.score += 1
             self.game.task_queue.schedule(self.step, 5, tasks.NO_PATIENCE)
         else:
             self.destroy_avatar()
 
     def destroy_avatar(self):
         self.instructions = None
+        self.game.check_round_over()
         Destroy(self.avatar).sched(self.game.task_queue)
