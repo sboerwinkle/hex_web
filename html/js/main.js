@@ -1,9 +1,16 @@
 
+let content = document.getElementById('content');
 let arena = document.getElementById('arena');
 let status_area = document.getElementById('status');
 let text_area = document.getElementById('text');
 let input_area = document.getElementById('input');
 text_area.value = ""; // Firefox likes to persist the content on a refresh for some reason
+
+// Circular buffer
+let history = [];
+let selectedHistoryIx = 0;
+let historyIx = 0;
+const historySize = 50;
 
 // This function modified from this stackoverflow answer: https://stackoverflow.com/a/10816667
 /*
@@ -153,6 +160,11 @@ document.getElementById('form').onsubmit = function () {
 	input_area.value = "";
 	if (msg.startsWith("/name ")) localStorage.name = msg.substring(6)
 	ws.send(msg);
+	if (msg != history[(historyIx + historySize - 1) % historySize]) {
+		history[historyIx] = msg;
+		historyIx = (historyIx + 1) % historySize;
+	}
+	selectedHistoryIx = historyIx;
 	return false; // Do not reload page
 }
 
@@ -161,4 +173,34 @@ arena.onclick = function(evt) {
 	let tile_y = Math.floor((offset.y - y_offset) / y_step);
 	let tile_x = Math.floor((offset.x - row_shift*tile_y) / x_step);
 	ws.send(`/click ${tile_x} ${tile_y}`);
+}
+
+input_area.onkeydown = function(evt) {
+	if (evt.keyCode == 38) { // up arrow
+		evt.preventDefault();
+		let newIx = (selectedHistoryIx + historySize - 1) % historySize;
+		// No wrapping, no undefined entries
+		if (newIx == historyIx || history[newIx] == undefined) return;
+
+		selectedHistoryIx = newIx;
+		input_area.value = history[selectedHistoryIx];
+	} else if (evt.keyCode == 40) { // down arrow
+		evt.preventDefault();
+		// Prevent wrapping the circular buffer
+		if (selectedHistoryIx == historyIx) return;
+
+		selectedHistoryIx = (selectedHistoryIx + 1) % historySize;
+		if (selectedHistoryIx == historyIx) {
+			input_area.value = "";
+		} else {
+			input_area.value = history[selectedHistoryIx];
+		}
+	}
+}
+
+function arena_to_bottom() { to_bottom(arena.parentElement); }
+function text_to_bottom() { to_bottom(text_area.parentElement); }
+function to_bottom(el) {
+	el.remove();
+	content.appendChild(el);
 }

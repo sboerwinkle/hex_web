@@ -41,10 +41,14 @@ class Player:
                     if p.name == name:
                         break
                 else:
-                    self.name = name
                     break
                 i += 1
+            self.whisper_raw("... You can change your name with the /name command")
         self.name = name
+        if lobby.players:
+            self.whisper_raw("... Current players: " + ", ".join([p.name for p in lobby.players]))
+        else:
+            self.whisper_raw("... You're the first one here!")
         lobby.players.append(self)
         self.lobby.broadcast(f">>> {self.name} joined")
         self.status = ""
@@ -151,13 +155,16 @@ class Lobby:
     def start_game(self, player, args):
         if self.game != None:
             raise PebkacException("Game already in progress!")
-        self.broadcast(f">>> Game was started by {player.name} (/game)")
-        if args == 'tend':
-            self.game = TendGame(self)
-        elif args == 'path':
+        #if args == 'tend':
+            #self.game = TendGame(self)
+        if args == 'path':
             self.game = PathGame(self)
-        else:
+        elif args == 'grow':
             self.game = GrowGame(self)
+        else:
+            player.whisper_raw("... Valid games are: path, grow")
+            return
+        self.broadcast(f">>> Game was started by {player.name} (/game)")
         for p in self.players:
             self.game.seat_player(p)
         self.game.begin()
@@ -165,9 +172,10 @@ lobby_dict = {}
 
 def print_help(player):
     player.whisper_raw('... Available server-level commands are:')
-    player.whisper_raw('... /game        - start a game')
+    player.whisper_raw('... /game [game] - start a game (run w/ no name to get a list)')
     player.whisper_raw('... /lobby       - stop the game')
     player.whisper_raw('... /name [name] - set your name')
+    player.whisper_raw('')
 
 async def connection_handler(websocket, path):
     message = await websocket.recv()
@@ -206,7 +214,7 @@ async def connection_handler(websocket, path):
                     elif message == '/help':
                         print_help(player)
                     else:
-                        player.whisper_raw('!!! Unknown command (no game in progress)')
+                        player.whisper_raw('!!! Unknown command')
             except Exception as e:
                 print(f"{player.name} threw:")
                 if isinstance(e, PebkacException):
