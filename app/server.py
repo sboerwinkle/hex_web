@@ -11,7 +11,7 @@ import traceback
 from . import game
 from .board import *
 from .common import *
-from .games import GrowGame, TendGame, PathGame
+from .games import GrowGame, TendGame, PathGame, SalvageGame
 
 logging.basicConfig()
 
@@ -161,8 +161,10 @@ class Lobby:
             self.game = PathGame(self)
         elif args == 'grow':
             self.game = GrowGame(self)
+        elif args == 'salvage':
+            self.game = SalvageGame(self)
         else:
-            player.whisper_raw("... Valid games are: path, grow")
+            player.whisper_raw("... Valid games are: path, grow, salvage")
             return
         self.broadcast(f">>> Game was started by {player.name} (/game)")
         for p in self.players:
