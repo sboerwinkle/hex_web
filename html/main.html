@@ -4,17 +4,10 @@
 
 <body>
 	<h2>Hex Web</h2>
-	<div id="content">
-		<div style="position: relative">
-			<textarea id="text" cols="80" rows="10" readonly></textarea>
-			<button style="position: absolute; right: 0; bottom: 0" onclick="text_to_bottom()">&#10515;</button>
-		</div>
-		<div style="position: relative">
-			<div id="arena" style="border:1px solid black; overflow:auto; width:400px; height:300px; position:relative;"></div>
-			<div id="status"></div>
-			<button style="position: absolute; right: 0; bottom: 0" onclick="arena_to_bottom()">&#10515;</button>
-		</div>
-	</div>
+	<textarea id="text" cols="80" rows="10" readonly></textarea>
+	<!--<button style="position: absolute; right: 0; bottom: 0" onclick="text_to_bottom()">&#10515;</button>-->
+	<div id="arena" style="border:1px solid black; overflow:auto; width:400px; height:300px; position:relative;"></div>
+	<div id="status"></div>
 	<form id="form" autocomplete="off">
 		<input id="input" size="80">
 		<input type="submit" value="->">

@@ -1,5 +1,5 @@
 
-let content = document.getElementById('content');
+//let content = document.getElementById('content');
 let arena = document.getElementById('arena');
 let status_area = document.getElementById('status');
 let text_area = document.getElementById('text');
@@ -198,9 +198,11 @@ input_area.onkeydown = function(evt) {
 	}
 }
 
+/*
 function arena_to_bottom() { to_bottom(arena.parentElement); }
 function text_to_bottom() { to_bottom(text_area.parentElement); }
 function to_bottom(el) {
 	el.remove();
 	content.appendChild(el);
 }
+*/
