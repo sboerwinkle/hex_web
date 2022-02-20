@@ -6,3 +6,4 @@
 # stream-lined; this file just being an import is so that everything else
 # can use relative packages.
 import app
+app.server.launch()

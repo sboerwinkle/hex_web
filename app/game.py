@@ -2,38 +2,36 @@ from .board import *
 from .common import *
 from . import tasks
 
-class Game:
+# Minimal impl of a Game, no amenities or bells and whistles
+class BareGame:
     def __init__(self, lobby):
         self.lobby = lobby
-        self.characters = []
-        self.board = Board(tile_type = WatchyTile)
     def seat_player(self, player):
-        self.characters.append(Character(self, player))
+        pass
+    def process_command(self, char, cmd):
+        # This will only be invoked if the player issuing the command
+        # has an associated character (`char`)
+        pass
     def begin(self):
         # Subclasses can use this to do something when the game starts
         pass
-    def process_command(self, char, cmd):
-        # This will be moved elsewhere eventually, to a subclass or something
-        bits = cmd.split()
-        if bits[0] == "/tf":
-            pos = (int(bits[1]), int(bits[2]))
-            tile = self.board.require_tile(pos)
-            for e in tile.contents:
-                if isinstance(e, SpriteEnt) and e.sprite == "grass":
-                    tile.rm(e)
-                    break
-            else:
-                tile.add(SpriteEnt("grass", self, pos))
-            self.step_complete()
-        else:
-            raise PebkacException(f"Unknown command '{bits[0]}'")
-    def step_complete(self):
-        for c in self.characters:
-            c.step_complete()
     async def cleanup(self):
         # Other games may have stuff they wanna do here.
         # Todo change this to use some sort of idiomatic Python cleanup?
         pass
+
+class Game(BareGame):
+    def __init__(self, *a, tile_type = WatchyTile, **ka):
+        super().__init__(*a, **ka)
+        self.characters = []
+        self.board = Board(tile_type = tile_type)
+    def seat_player(self, player):
+        self.characters.append(Character(self, player))
+    def process_command(self, char, cmd):
+        raise PebkacException(f"Unknown command '{cmd.split()[0]}'")
+    def step_complete(self):
+        for c in self.characters:
+            c.step_complete()
 
 # Borrowing terminology from DnD, a "Player" is the human, and a "Character" is the in-game avatar.
 # Characters have game-state data, and can be associated (or disassociated) with a player due to any number of things:
@@ -57,7 +55,7 @@ class Character:
         for col in self.game.board.board:
             for cell in col:
                 for ent in cell.contents:
-                    ent.draw(self, out_board)
+                    ent.draw(out_board)
         return self.layout
 
 class Ent:
@@ -65,7 +63,7 @@ class Ent:
         self.game = game
         self.board = game.board
         self.pos = None
-    def draw(self, char, out_board):
+    def draw(self, out_board):
         pass
     # TODO Maybe some standard way to get qualitative information about what it is???
     # qualia(self) -> Qualia (???)
@@ -84,10 +82,22 @@ class SpriteEnt(Ent):
     def __init__(self, sprite, *a, **kwa):
         self.sprite = sprite
         super().__init__(*a, **kwa)
-    def draw(self, char, out_board):
+    def draw(self, out_board):
         if self.pos is not None:
-            # Maybe we ask the `char` if it has any line-of-sight preferences???
             out_board.require_tile(self.pos).add(self.sprite)
+
+class OwnedEnt(Ent):
+    def __init__(self, owner, *a, **kwa):
+        self.owner = owner
+        super().__init__(*a, **kwa)
+    def _move(self, pos):
+        fire = (pos is None) != (self.pos is None)
+        super()._move(pos)
+        if fire:
+            if pos is None:
+                self.owner.owned_ent_removed(self)
+            else:
+                self.owner.owned_ent_added(self)
 
 class WriteOp:
     """

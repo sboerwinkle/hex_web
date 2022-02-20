@@ -80,7 +80,7 @@ class MagentaPlant(Ent):
         self.delay = delay
         self.stage = 1
         self.game.task_queue.schedule(self.grow, self.delay, tasks.NO_PATIENCE)
-    def draw(self, char, out_board):
+    def draw(self, out_board):
         out_board.require_tile(self.pos).add("mag_pl_" + str(self.stage))
     def grow(self):
         if self.game == None:
@@ -105,7 +105,7 @@ class CoverPlant(Ent):
     def get_delay(self):
         # TODO This should be weird and more complicated
         return self.delay
-    def draw(self, char, out_board):
+    def draw(self, out_board):
         out_board.require_tile(self.pos).add(self.sprite_base + str(self.stage))
     def develop(self):
         self.stage += 1

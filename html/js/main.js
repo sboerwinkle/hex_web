@@ -73,6 +73,20 @@ function make_img_tag(x, y, z, src) {
 	return tag;
 }
 
+function make_button_tag(text, listener) {
+	let tag = document.createElement('button');
+	tag.type = 'button';
+	tag.textContent = text;
+	tag.addEventListener('click', listener);
+	return tag;
+}
+
+function make_span_tag(text) {
+	let tag = document.createElement('span');
+	tag.textContent = text;
+	return tag;
+}
+
 function reset_board() {
 	for (let x in board) {
 		let col = board[x];
@@ -108,6 +122,51 @@ function update_tile(x, y, version, to_keep, new_items) {
 	}
 }
 
+function set_status(input) {
+	for (let c of status_area.children) status_area.removeChild(c);
+	let start_index = 0;
+	let bits = [];
+	while (true) {
+		let index = input.indexOf('{', start_index);
+		if (index == -1) {
+			if (start_index < input.length) {
+				bits.push(input.substring(start_index));
+			}
+			break;
+		}
+		if (index > start_index) bits.push(input.subtring(start_index, index));
+		let index2 = input.indexOf('}', index) + 1;
+		if (index2 == 0) {
+			console.log("Unterminated '{' in:");
+			console.log(input);
+			break;
+		}
+		bits.push(input.substring(index, index2));
+		start_index = index2;
+	}
+	for (let bit of bits) {
+		let tag;
+		if (bit[0] == '{') {
+			bit = bit.substring(1, bit.length - 1);
+			let split = bit.indexOf('|');
+			let text;
+			let listener;
+			if (split == -1) {
+				text = bit;
+				listener = () => { alert('broken'); };
+			} else {
+				text = bit.substring(0, split);
+				let action = bit.substring(split + 1);
+				listener = () => { ws.send(action); };
+			}
+			tag = make_button_tag(text, listener);
+		} else {
+			tag = make_span_tag(bit);
+		}
+		status_area.appendChild(tag);
+	}
+}
+
 function process_message(event) {
 	let obj = JSON.parse(event.data);
 	if (obj.type == "foo") {
@@ -140,7 +199,7 @@ function process_message(event) {
 			delete board[x]
 		}
 	} else if (obj.type == "status") {
-		status_area.textContent = obj.text;
+		set_status(obj.text);
 	} else {
 		alert("Unknown message type '" + obj.type + "'");
 	}

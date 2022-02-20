@@ -236,7 +236,8 @@ async def connection_handler(websocket, path):
 
 # TODO Port is a program arg
 # This code taken from the websockets tutorial, is there any less-ugly way to do this?
-loop = asyncio.get_event_loop()
-print("Init complete, entering websocket loop")
-loop.run_until_complete(websockets.serve(connection_handler, port=15000))
-loop.run_forever()
+def launch():
+    loop = asyncio.get_event_loop()
+    print("Init complete, entering websocket loop")
+    loop.run_until_complete(websockets.serve(connection_handler, port=15000))
+    loop.run_forever()

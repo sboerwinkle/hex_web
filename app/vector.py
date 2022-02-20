@@ -1,3 +1,5 @@
+from math import sqrt
+
 units=[(1,0),(1,-1),(0,-1),(-1,0),(-1,1),(0,1)]
 def add(v1, v2):
     return (v1[0]+v2[0], v1[1]+v2[1])
@@ -5,6 +7,8 @@ def sub(v1, v2):
     return (v1[0]-v2[0], v1[1]-v2[1])
 def mult(v1, c):
     return (v1[0]*c, v1[1]*c)
+def cross(v1, v2):
+    return v1[0]*v2[1] - v1[1]*v2[0]
 
 def measure(v):
     (x,y) = v
@@ -62,3 +66,18 @@ def transform(v, flip, rot):
     y_contrib = mult(units[(rot+5)%6], y)
 
     return add(x_contrib, y_contrib)
+
+def display_dist(v):
+    # For each y, it gains 1/2 x
+    #   (rows are shifted progressively further)
+    # Each y then only counts for sqrt(3)/2
+    #   (angle of travel to the next row is 60 deg off horizontal)
+    # so:
+    # sqrt( (x+y/2)**2            + (y*sqrt(3)/2)**2 )
+    # sqrt( (x+y/2)**2            + y*y*3/4 )
+    # sqrt( x*x + 2*x*y/2 + y*y/4 + y*y*3/4 )
+    # sqrt( x*x + 2*x*y/2 + y*y )
+    # sqrt( x*x + x*y     + y*y )
+    (x,y) = v
+    return sqrt(x*(x + y) + y*y)
+
