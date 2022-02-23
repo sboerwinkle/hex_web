@@ -17,6 +17,9 @@ class Opt:
 class SalvageGame(Game):
     def __init__(self, *a, **kwa):
         super().__init__(*a, tile_type=Tile, **kwa)
+        for y in range(0, 7):
+            for x in range(-(y//2), 8 + (-y//2)):
+                SpriteEnt("grass", self)._move((x,y))
         for o in options.values():
             o.handler(self, o.default)
         self.step_complete()
@@ -28,13 +31,12 @@ class SalvageGame(Game):
         player.whisper_raw(f">>> Welcome!")
         self.characters.append(SalvageCharacter(self, player))
     def process_command(self, char, cmd):
-        # TODO: /click, /grass, /eye
         bits = cmd.split()
         if bits[0] == '/click':
             pos = (int(bits[1]), int(bits[2]))
             char.tile_clicked(pos)
-        elif bits[0] == '/grass':
-            char.set_mode(MODE_GRASS)
+        elif bits[0] == '/wall':
+            char.set_mode(MODE_WALL)
         elif bits[0] == '/eye':
             char.set_mode(MODE_EYE)
         else:
@@ -47,9 +49,15 @@ class SalvageGame(Game):
     def add_visible_spaces(self, spaces):
         d = self.visible_spaces
         for (k, v) in spaces:
-            d[k] = v or d.get(k, False)
+            d[k] = max(v, d.get(k, 0))
     def is_occluded(self, pos):
-        return len(self.board.get_tile(pos).contents) == 0
+        stuff = self.board.get_tile(pos).contents
+        if len(stuff) == 0:
+            return True
+        for e in stuff:
+            if isinstance(e, SpriteEnt) and e.sprite == "hex_wall":
+                return True
+        return False
 
 options = {}
 """
@@ -64,7 +72,7 @@ options = {
 }
 """
 
-MODE_GRASS = object()
+MODE_WALL = object()
 MODE_EYE = object()
 
 class SalvageCharacter(Character):
@@ -75,18 +83,20 @@ class SalvageCharacter(Character):
     def draw_to_board(self, out_board):
         for k in self.game.visible_spaces:
             tile = self.game.board.require_tile(k)
-            full_visibility = self.game.visible_spaces[k];
+            visibility = self.game.visible_spaces[k];
             for ent in tile.contents:
-                # TODO some ents may not be drawn depending on `full_visibility`
+                # TODO some ents may not be drawn depending on `visibility`
                 # TODO again: Maybe `Entity.draw` should just accept a tile,
                 #   and we handle fetching it if there are a positive number of ents?
                 ent.draw(out_board)
-            if not full_visibility:
-                out_board.require_tile(k).add("hex_overlay_gray")
-        if self.mode == MODE_GRASS:
+            if visibility == 1:
+                out_board.require_tile(k).add("hex_overlay_white")
+            elif visibility == 2:
+                out_board.require_tile(k).add("hex_overlay_light_white")
+        if self.mode == MODE_WALL:
             self.player.set_status('{Place Eye|/eye}')
         else:
-            self.player.set_status('{Cancel Eye Placement|/grass}')
+            self.player.set_status('{Cancel Eye Placement|/wall}')
         return layout
     def owned_ent_added(self, e):
         self.eyeballs.add(e)
@@ -104,23 +114,24 @@ class SalvageCharacter(Character):
         super().set_player(p)
     def tile_clicked(self, pos):
         tile = self.game.board.get_tile(pos)
-        candidate_ent = None
+        if len(tile.contents) == 0:
+            return
         for e in tile.contents:
             if isinstance(e, Eyeball):
                 e._move(None)
                 self.mode = MODE_EYE
                 break
-            if isinstance(e, SpriteEnt):
-                candidate_ent = e
+            if isinstance(e, SpriteEnt) and e.sprite == "hex_wall":
+                e._move(None)
+                self.mode = MODE_WALL
+                break
         else:
-            if candidate_ent is None:
-                SpriteEnt("grass", self.game)._move(pos)
-            if self.mode == MODE_GRASS:
-                if candidate_ent is not None:
-                    candidate_ent._move(None)
+            if self.mode == MODE_WALL:
+                new_ent = SpriteEnt("hex_wall", self.game)
             else:
-                Eyeball(self, self.game)._move(pos)
-                self.mode = MODE_GRASS
+                new_ent = Eyeball(self, self.game)
+                self.mode = MODE_WALL
+            new_ent._move(pos)
         self.game.step_complete()
     def set_mode(self, mode):
         self.mode = mode

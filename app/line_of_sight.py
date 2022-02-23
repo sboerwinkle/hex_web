@@ -47,6 +47,8 @@ class Arc:
 class WholeArc(Arc):
     def intersects(self, pair):
         return True
+    def __repr__(self):
+        return "WholeArc"
     def contains(self, v):
         return True
     def shadow(self, pair):
@@ -57,6 +59,8 @@ class ConcaveArc(Arc):
         super().__init__(*a, **ka)
         self.left = left
         self.right = right
+    def __repr__(self):
+        return f"ConcaveArc between {self.left} and {self.right}"
     def intersects(self, pair):
         return (
             vec.cross(pair[0], self.right) > 0 or
@@ -70,7 +74,7 @@ class ConcaveArc(Arc):
             # Pass ownership of our heap/marked to this Arc, it may be the only one
             right_arc = ConvexArc(pair[1], self.right, self.heap, self.marked)
             if vec.cross(pair[0], self.left) >= 0:
-                if vec.cross(self.right, pair[0]) > 0:
+                if vec.cross(self.right, pair[0]) >= 0:
                     return [right_arc]
                 else:
                     self.right = pair[0]
@@ -101,6 +105,8 @@ class ConvexArc(Arc):
         super().__init__(*a, **ka)
         self.left = left
         self.right = right
+    def __repr__(self):
+        return f"ConvexArc between {self.left} and {self.right}"
     def intersects(self, pair):
         if vec.cross(self.left, pair[0]) > 0:
             return vec.cross(pair[0], self.right) > 0
@@ -126,7 +132,7 @@ class ConvexArc(Arc):
 
 def los_fill(occlude_func, src):
     ret = []
-    ret.append((src, True))
+    ret.append((src, 3))
     start_heap = []
     for u in vec.units:
         heappush(start_heap, (1, u))
@@ -136,23 +142,30 @@ def los_fill(occlude_func, src):
     while len(arcs) > 0:
         arc = arcs[0]
         while True:
-            (_, offset) = heappop(arc.heap)
-            #print('Pulled ' + str(offset))
+            (distance, offset) = heappop(arc.heap)
+            #if distance < 1.5:
+            #    print('Pulled ' + str(offset))
 
             pair = get_visual_extent(offset)
-            #print(pair)
             if not arc.intersects(pair):
                 continue
             position = vec.add(src, offset)
             if occlude_func(position):
-                ret.append((position, True))
+                ret.append((position, 3))
                 arcs = arc.shadow(pair) + arcs[1:]
-                #print('arcs is now ' + str(arcs))
+                #if distance < 1.5:
+                #    print('arcs is now ' + repr(arcs))
                 break
 
             # Will include the position w/ `True` if the center is visible,
             # or `False` if part of the cell (but not the center) is visible.
-            ret.append((position, arc.contains(offset)))
+            if not arc.contains(offset):
+                visibility = 1
+            elif arc.contains(pair[0]) and arc.contains(pair[1]):
+                visibility = 3
+            else:
+                visibility = 2
+            ret.append((position, visibility))
 
             for u in vec.units:
                 neighbor = vec.add(offset, u)
