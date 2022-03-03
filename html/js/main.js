@@ -123,7 +123,6 @@ function update_tile(x, y, version, to_keep, new_items) {
 }
 
 function set_status(input) {
-	for (let c of status_area.children) status_area.removeChild(c);
 	let start_index = 0;
 	let bits = [];
 	while (true) {
@@ -134,7 +133,7 @@ function set_status(input) {
 			}
 			break;
 		}
-		if (index > start_index) bits.push(input.subtring(start_index, index));
+		if (index > start_index) bits.push(input.substring(start_index, index));
 		let index2 = input.indexOf('}', index) + 1;
 		if (index2 == 0) {
 			console.log("Unterminated '{' in:");
@@ -144,8 +143,7 @@ function set_status(input) {
 		bits.push(input.substring(index, index2));
 		start_index = index2;
 	}
-	for (let bit of bits) {
-		let tag;
+	let newChildren = bits.map(bit => {
 		if (bit[0] == '{') {
 			bit = bit.substring(1, bit.length - 1);
 			let split = bit.indexOf('|');
@@ -159,12 +157,12 @@ function set_status(input) {
 				let action = bit.substring(split + 1);
 				listener = () => { ws.send(action); };
 			}
-			tag = make_button_tag(text, listener);
+			return make_button_tag(text, listener);
 		} else {
-			tag = make_span_tag(bit);
+			return make_span_tag(bit);
 		}
-		status_area.appendChild(tag);
-	}
+	});
+	status_area.replaceChildren(...newChildren);
 }
 
 function process_message(event) {

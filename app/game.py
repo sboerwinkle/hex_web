@@ -86,18 +86,22 @@ class SpriteEnt(Ent):
         if self.pos is not None:
             out_board.require_tile(self.pos).add(self.sprite)
 
-class OwnedEnt(Ent):
-    def __init__(self, owner, *a, **kwa):
-        self.owner = owner
+class WatchedEnt(Ent):
+    def __init__(self, *a, **kwa):
+        self.watchers = []
         super().__init__(*a, **kwa)
+    def add_watcher(self, w):
+        self.watchers.append(w)
+        if self.pos is not None:
+            w(self)
+    def rm_watcher(self, w):
+        self.watchers.remove(w)
     def _move(self, pos):
         fire = (pos is None) != (self.pos is None)
         super()._move(pos)
         if fire:
-            if pos is None:
-                self.owner.owned_ent_removed(self)
-            else:
-                self.owner.owned_ent_added(self)
+            for w in self.watchers.copy():
+                w(self)
 
 class WriteOp:
     """

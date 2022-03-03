@@ -157,6 +157,7 @@ def los_fill(occlude_func, src):
                 #    print('arcs is now ' + repr(arcs))
                 break
 
+            """
             # Will include the position w/ `True` if the center is visible,
             # or `False` if part of the cell (but not the center) is visible.
             if not arc.contains(offset):
@@ -165,6 +166,16 @@ def los_fill(occlude_func, src):
                 visibility = 3
             else:
                 visibility = 2
+            """
+            # Experimenting with: hex is fully colored if you can fully see a 1/3 scale hex in the center,
+            # and is dim otherwise
+            inner_pair = get_visual_extent(vec.mult(offset, 3))
+            # For our situation, containing both ends is equivalent to encompassing the entire arc
+            if arc.contains(inner_pair[0]) and arc.contains(inner_pair[1]):
+                visibility = 3
+            else:
+                visibility = 1
+
             ret.append((position, visibility))
 
             for u in vec.units:
