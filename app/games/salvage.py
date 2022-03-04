@@ -40,6 +40,8 @@ class SalvageGame(Game):
             char.rm_selected()
         elif bits[0] == '/eye':
             char.toggle_eye()
+        elif bits[0] == '/home':
+            char.path_home()
         elif bits[0] == '/step':
             char.manual_step(int(bits[1]))
         elif bits[0] == '/clear':
@@ -83,7 +85,7 @@ options = {
 
 MODE_DEFAULT = object()
 MODE_EYE = object()
-MAX_PATH = 3
+MAX_PATH = 4
 
 class SalvageCharacter(Character):
     def __init__(self, *a, **kwa):
@@ -110,7 +112,7 @@ class SalvageCharacter(Character):
                     out_board.require_tile(p).add(f"hex_arrow_{d}")
         if self.selected is not None:
             out_board.require_tile(self.selected.pos).add("hex_select")
-            self.player.set_status('{Remove|/rm}')
+            self.player.set_status('{Remove|/rm} {Return|/home}')
         elif self.mode == MODE_DEFAULT:
             self.player.set_status('{Place Eye|/eye}')
         else:
@@ -184,6 +186,12 @@ class SalvageCharacter(Character):
         if self.selected is None:
             raise PebkacException("Nothing selected, cannot clear!")
         self.selected.path = []
+        self.game.step_complete()
+    def path_home(self):
+        s = self.selected
+        if s is None:
+            raise PebkacException("Nothing selected, cannot go home!")
+        s.path = update_path(s.pos, s.path, MAX_PATH, s.pos, self.game.plannable)
         self.game.step_complete()
     def rm_selected(self):
         if self.selected is None:
