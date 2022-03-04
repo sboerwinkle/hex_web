@@ -40,6 +40,10 @@ class SalvageGame(Game):
             char.rm_selected()
         elif bits[0] == '/eye':
             char.toggle_eye()
+        elif bits[0] == '/step':
+            char.manual_step(int(bits[1]))
+        elif bits[0] == '/clear':
+            char.clear_steps()
         else:
             super().process_command(char, cmd)
     def step_complete(self):
@@ -79,6 +83,7 @@ options = {
 
 MODE_DEFAULT = object()
 MODE_EYE = object()
+MAX_PATH = 3
 
 class SalvageCharacter(Character):
     def __init__(self, *a, **kwa):
@@ -144,7 +149,7 @@ class SalvageCharacter(Character):
                 s.rm_watcher(self.select_watch)
                 self.step_complete()
             else:
-                s.path = update_path(s.pos, s.path, 3, pos, self.game.plannable)
+                s.path = update_path(s.pos, s.path, MAX_PATH, pos, self.game.plannable)
                 self.game.step_complete()
         else:
             for e in tile.contents:
@@ -166,6 +171,20 @@ class SalvageCharacter(Character):
                 self.mode = MODE_DEFAULT
             new_ent._move(pos)
             self.game.step_complete()
+    def manual_step(self, angle):
+        if self.selected is None:
+            raise PebkacException("Nothing selected, cannot step!")
+        path = self.selected.path
+        if len(path) >= MAX_PATH:
+            raise PebkacException("Path too long, cannot step!")
+        start = path[-1][0] if len(path) else self.selected.pos
+        path.append((vec.add(start, vec.units[angle]), angle))
+        self.game.step_complete()
+    def clear_steps(self):
+        if self.selected is None:
+            raise PebkacException("Nothing selected, cannot clear!")
+        self.selected.path = []
+        self.game.step_complete()
     def rm_selected(self):
         if self.selected is None:
             raise PebkacException("Nothing selected, cannot remove!")
