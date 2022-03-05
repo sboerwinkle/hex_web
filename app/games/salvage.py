@@ -46,6 +46,8 @@ class SalvageGame(Game):
             char.manual_step(int(bits[1]))
         elif bits[0] == '/clear':
             char.clear_steps()
+        elif bits[0] == '/done':
+            self.run_paths()
         else:
             super().process_command(char, cmd)
     def step_complete(self):
@@ -57,7 +59,7 @@ class SalvageGame(Game):
         d = self.visible_spaces
         for (k, v) in spaces:
             d[k] = max(v, d.get(k, 0))
-    def is_occluded(self, pos):
+    def is_opaque(self, pos):
         stuff = self.board.get_tile(pos).contents
         if len(stuff) == 0:
             return True
@@ -65,10 +67,67 @@ class SalvageGame(Game):
             if isinstance(e, SpriteEnt) and e.sprite == "hex_wall":
                 return True
         return False
+    def is_walkable(self, pos):
+        # Eventually this will also have to return false for
+        # enemy units etc. We could friendly units as walkable
+        # because they will all update position simultaneously,
+        # and those "collisions" are handled separately
+        return not self.is_opaque(pos)
     def plannable(self, pos):
         if pos not in self.visible_spaces:
             return True
-        return not self.is_occluded(pos)
+        return self.is_walkable(pos)
+    def run_paths(self):
+        destinations = {}
+        to_resolve = []
+        def place(person, step, handicap):
+            dest = person.pos if step == -1 else person.path[step][0]
+            try:
+                l = destinations[dest]
+            except KeyError:
+                l = []
+                destinations[dest] = l
+            if len(l) == 1:
+                to_resolve.append(dest)
+            l.append((person, (step, handicap)))
+        for c in self.characters:
+            for e in c.eyeballs:
+                i = -1
+                path = e.path
+                for i in range(len(path)):
+                    if not self.is_walkable(path[i][0]):
+                        i -= 1
+                        break
+                place(e, i, 0)
+        while to_resolve:
+            to_place = []
+            for d in to_resolve:
+                competitors = destinations[d]
+                winner = None
+                # `competitors` will be non-empty,
+                # this just creates a `best` that the first person will always beat.
+                best = (competitors[0][1][0] + 1, 0)
+                for item in competitors:
+                    score = item[1]
+                    if score < best:
+                        best = score
+                        winner = item
+                    elif score == best:
+                        winner = None
+                if winner:
+                    competitors.remove(winner)
+                    destinations[d] = [winner]
+                else:
+                    destinations[d] = []
+                to_place += competitors
+            to_resolve = []
+            for person, score in to_place:
+                place(person, score[0] - 1, score[1] - 1)
+        for d in destinations:
+            for person, _ in destinations[d]:
+                person._move(d)
+                person.path = []
+        self.step_complete()
 
 options = {}
 """
@@ -110,13 +169,20 @@ class SalvageCharacter(Character):
             for e in c.eyeballs:
                 for p, d in e.path:
                     out_board.require_tile(p).add(f"hex_arrow_{d}")
+        status_line = '{Complete|/done}'
         if self.selected is not None:
             out_board.require_tile(self.selected.pos).add("hex_select")
-            self.player.set_status('{Remove|/rm} {Return|/home}')
+            for p, _ in self.selected.path:
+                # Originally I was going to outline the path arrows of
+                # the selected person, but that's like 6 more sprites
+                # and I don't wanna draw those.
+                out_board.require_tile(p).add("hex_select")
+            status_line += ' {Remove|/rm} {Return|/home}'
         elif self.mode == MODE_DEFAULT:
-            self.player.set_status('{Place Eye|/eye}')
+            status_line += ' {Place Eye|/eye}'
         else:
-            self.player.set_status('{Cancel Eye Placement|/eye}')
+            status_line += ' {Cancel Eye Placement|/eye}'
+        self.player.set_status(status_line)
         return layout
     def eye_watch(self, e):
         if e.pos is not None:
@@ -131,7 +197,7 @@ class SalvageCharacter(Character):
             e.rm_watcher(self.select_watch)
     def do_los(self):
         for e in self.eyeballs:
-            self.game.add_visible_spaces(los_fill(self.game.is_occluded, e.pos))
+            self.game.add_visible_spaces(los_fill(self.game.is_opaque, e.pos))
     def set_player(self, p):
         if p is None:
             if self.player is not None:

@@ -1,19 +1,20 @@
 from . import vector as vec
 
 def update_path(start, l, max_len, dest, traversable_fn):
-    if len(l) and l[-1][0] == dest:
-        # Clicking on the last segment is a special case,
-        # we try to find the most direct path.
-        ps = [start]
-    else:
-        # Otherwise we try to get there from the existing path.
-        # Indexing between `l` and `ps` will be off by one,
-        # but oddly that usually works out correctly for what we want.
-        ps = [start] + [x[0] for x in l]
-    # Try to get to the dest greedily from each point on the path
-    for i in range(len(ps)-1, -1, -1):
-        pos = ps[i]
+    # This ordering is better for when we care about the destination, and less about the path.
+    ps = [(start, 0)] + [(l[i][0], i+1) for i in range(len(l))]
+    # If we care about the path more, we would add something like this:
+    #ps.reverse()
+    #if len(l) and ps[0][0] == dest:
+    #    ps = ps[1:]
+
+    # Try to get to the dest greedily from each of our possible starting points
+    for pos, i in ps:
         remaining = max_len - i
+        # This is just an efficiency boost when searching forwards,
+        # and if searching backwards it allows us to enforce finding
+        # a new path under some conditions.
+        do_check = i < len(l)
         steps = []
         # Loop adding more steps until we get there or fail
         while True:
@@ -35,4 +36,10 @@ def update_path(start, l, max_len, dest, traversable_fn):
                 # No suitable options found to advance,
                 # abandon this starting point
                 break
+            if do_check:
+                do_check = False
+                if l[i][0] == pos:
+                    # In this case we just re-planned the same next step,
+                    # which we can throw out as irrelevant calculation.
+                    break
     return l

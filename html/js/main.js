@@ -204,7 +204,7 @@ function process_message(event) {
 }
 
 function handle_close(event) {
-	alert("Either the server shut down, or there's a bug maybe!");
+	alert("Lost connection to server");
 }
 
 let ws = new WebSocket(`ws://${window.location.hostname}:15000`);
