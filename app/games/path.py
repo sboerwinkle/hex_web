@@ -3,7 +3,7 @@ from ..game import *
 import math
 from random import Random
 
-layout = (31, 31, 0, 0)
+layout = (31, 31, 0, 0, 'sq_empty')
 
 path_symbols = {
         'w': ( 0, -1),

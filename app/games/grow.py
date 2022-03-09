@@ -1,9 +1,9 @@
 from .. import wait, tasks
 from ..game import *
 
-# Basic hex layout (x step, y step, row shift, y offset)
-# (The last being because the tip top of the sprite is above the clickable area)
-layout = (50, 43, 25, 7)
+# Basic hex layout (x step, y step, row shift, y offset, clear image)
+# (y_offset being because the tip top of the sprite is above the clickable area)
+layout = (50, 43, 25, 7, 'hex_empty')
 
 class GrowGame(Game):
     def __init__(self, *a, **kwa):

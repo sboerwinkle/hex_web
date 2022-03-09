@@ -11,7 +11,7 @@ import traceback
 from . import game
 from .board import *
 from .common import *
-from .games import GrowGame, TendGame, PathGame, SalvageGame
+from .games import GrowGame, PathGame, SalvageGame
 
 logging.basicConfig()
 
@@ -90,7 +90,7 @@ class Player:
         if new_board_layout != self.board_layout:
             self.board_layout = new_board_layout
             send_me['layout'] = new_board_layout
-            # Specifying the layout also clears the board client-side, (TODO this)
+            # Specifying the layout also clears the board client-side,
             # since usually it doesn't make sense to even use the same
             # sprites if the layout is changing
             old_board = Board(tile_offset = None, tile_type = VersionedTile) # TODO This is used like 3x, make into a fn
@@ -155,8 +155,6 @@ class Lobby:
     def start_game(self, player, args):
         if self.game != None:
             raise PebkacException("Game already in progress!")
-        #if args == 'tend':
-            #self.game = TendGame(self)
         if args == 'path':
             self.game = PathGame(self)
         elif args == 'grow':

@@ -5,7 +5,7 @@ from ..path_planning import update_path
 import math
 from random import Random
 
-layout = (50, 43, 25, 7)
+layout = (50, 43, 25, 7, 'hex_empty')
 
 class Opt:
     def __init__(self, default, handler, descr):
@@ -212,9 +212,10 @@ class SalvageCharacter(Character):
             return
         s = self.selected
         if s is not None:
+            self.selected = None
+            s.rm_watcher(self.select_watch)
             if pos == s.pos:
-                self.selected = None
-                s.rm_watcher(self.select_watch)
+                # Just deselect, don't need to update everyone
                 self.step_complete()
             else:
                 s.path = update_path(s.pos, s.path, MAX_PATH, pos, self.game.plannable)
@@ -257,6 +258,8 @@ class SalvageCharacter(Character):
         s = self.selected
         if s is None:
             raise PebkacException("Nothing selected, cannot go home!")
+        self.selected = None
+        s.rm_watcher(self.select_watch)
         s.path = update_path(s.pos, s.path, MAX_PATH, s.pos, self.game.plannable)
         self.game.step_complete()
     def rm_selected(self):

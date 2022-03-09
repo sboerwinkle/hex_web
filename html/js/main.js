@@ -1,6 +1,6 @@
 
-//let content = document.getElementById('content');
 let arena = document.getElementById('arena');
+let context = arena.getContext('2d');
 let status_area = document.getElementById('status');
 let text_area = document.getElementById('text');
 let input_area = document.getElementById('input');
@@ -42,12 +42,95 @@ let x_step = 50; // Distance sideways to next tile
 let y_step = 43; // Distance vertically to next row
 let row_shift = 25; // How much each subsequent row is shifted, e.g. x_step/2 for a hex grid
 let y_offset = 7; // How far down the sprite the button "visually" starts; this applies to hex grids since the image encompasses the whole hex, but the clickable area is a rectangle (and as such isn't the entire vertical height)
+let clearImageName = 'hex_empty';
+
+// Just a valid target for drawing, even if it has no content
+const failImage = new Image();
+let firstFailure = true;
+
+let images = {};
+const promises = {};
+function requireImage(name) {
+	if (!images[name] && !promises[name]) {
+		const image = new Image();
+		promises[name] = new Promise((resolve, _) => {
+			image.addEventListener('load', () => {
+				//setTimeout(() => { // For testing, imitates slow load
+				delete promises[name];
+				images[name] = image;
+				resolve();
+				//}, 2000);          // See above
+			});
+			image.addEventListener('error', e => {
+				if (firstFailure) {
+					firstFailure = false;
+					alert("An image failed to load. Further failures will only show in the console.");
+				}
+				console.log("Error while loading " + image.src);
+				delete promises[name];
+				images[name] = failImage;
+				resolve();
+			});
+		});
+		// It seems like maybe this is *immediately* loading the image some times,
+		// so it cannot happen inside the promise or it will try to delete its entry in `promises`
+		// before the promise is fully created and assigned.
+		image.src = "assets/" + name + ".png";
+	}
+}
 
 function Tile() {
 	this.version = -1;
 	this.things = [];
+	this.pendingDraws = [];
 }
 
+async function addDraws(tile, x, y, items, reset = false) {
+	let xPixels = x_step*x + row_shift*y;
+	let yPixels = y_step*y;
+	for (let i of items) requireImage(i);
+	let l = tile.pendingDraws;
+	if (l.length) {
+		// There is an existing thread for this tile
+		if (reset) {
+			// Other thread will immediately exit when it resumes execution.
+			// Note that we're playing very carefully with object references here,
+			// as the identity of `tile.pendingDraws` is about to change.
+			l.splice(0);
+		} else {
+			// There's an existing thread,
+			// and we're only adding to its tasks,
+			// so we can just dump it onto the list and move on.
+			l.push(...items);
+			return;
+		}
+	}
+
+	// Shallow copy; probably unnecessary, but removes any subtle "gotchas" about what values you can pass for `items`.
+	l = items.slice();
+	tile.pendingDraws = l;
+
+	while (l.length) {
+		let name = l[0];
+		let image;
+		if (images[name]) {
+			image = images[name];
+		} else {
+			if (!promises[name]) {
+				console.log("No image or promise for " + name);
+				image = failImage;
+			} else {
+				await promises[name];
+				continue;
+			}
+		}
+		context.drawImage(image, xPixels, yPixels);
+		l.shift();
+	}
+}
+
+// All this just-in-time row and tile creation was from back when we thought it might scroll more.
+// Nowadays we could maybe do all this up front?
 function get_tile(x, y) {
 	let col = board[x];
 	if (col === undefined) {
@@ -60,17 +143,6 @@ function get_tile(x, y) {
 		col[y] = tile;
 	}
 	return tile;
-}
-
-function make_img_tag(x, y, z, src) {
-	let tag = document.createElement('img');
-	let style = tag.style;
-	style.position = 'absolute';
-	style.left = (x_step*x + row_shift*y) + "px";
-	style.top = (y_step*y) + "px";
-	style.zIndex = z;
-	tag.src = "assets/" + src + ".png";
-	return tag;
 }
 
 function make_button_tag(text, listener) {
@@ -92,13 +164,15 @@ function reset_board() {
 		let col = board[x];
 		for (let y in col) {
 			let tile = col[y];
-			for (let tag of tile.things) {
-				arena.removeChild(tag);
-			}
+			// Make sure any drawing threads will immediately exit when they resume
+			tile.pendingDraws.splice(0);
 		}
 	}
+	context.clearRect(0, 0, arena.width, arena.height);
 	// Spares us having to `delete` each tile and col individually
 	board = {};
+	// Not sure if this part is necessary, but nothing wrong with cleaning up the images I guess
+	images = {};
 }
 
 function update_tile(x, y, version, to_keep, new_items) {
@@ -106,20 +180,22 @@ function update_tile(x, y, version, to_keep, new_items) {
 	let things = tile.things;
 	if (tile.version != version) alert('Tile out of date at ' + x + ', ' + y + "(local " + tile.version + " vs " + version + ")");
 	tile.version = (!version) + 0;
+
 	if (things.length < to_keep) alert('Missing some items at ' + x + ", " + y);
-	removed = things.splice(to_keep)
-	for (let r of removed) {
-		arena.removeChild(r);
+	let trimmed = things.length > to_keep;
+	things.splice(to_keep);
+	things.push(...new_items);
+
+	if (trimmed) {
+		// Have to redraw from scratch in this case
+		let items = [clearImageName].concat(things);
+		addDraws(tile, x, y, items, true);
+	} else {
+		// Fine to just draw more stuff, the simple way
+		addDraws(tile, x, y, new_items);
 	}
-	for (let n of new_items) {
-		let tag = make_img_tag(x, y, to_keep, n)
-		to_keep++;
-		things.push(tag);
-		arena.appendChild(tag);
-	}
-	if (things.length == 0) {
-		delete board[x][y];
-	}
+	// This could probably go away if we were allocating all tiles in advance, not sure though
+	if (things.length == 0) tile.version = -1;
 }
 
 function set_status(input) {
@@ -184,17 +260,10 @@ function process_message(event) {
 			y_step = layout[1];
 			row_shift = layout[2];
 			y_offset = layout[3];
+			clearImageName = layout[4];
 		}
 		for (let item of obj.items) {
 			update_tile(item.x, item.y, item.ver, item.keep, item.add);
-		}
-		// Clean up unused columns. Probably not really necessary?
-		colsearch:
-		for (let x in board) {
-			for (let y in board[x]) {
-				continue colsearch;
-			}
-			delete board[x]
 		}
 	} else if (obj.type == "status") {
 		set_status(obj.text);

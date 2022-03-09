@@ -35,7 +35,7 @@ def get_visual_extent(v):
         elif vec.cross(test, rightmost) < 0:
             rightmost = test
     if vec.cross(leftmost, rightmost) <= 0:
-        raise Exception("visual extend of a cell should always be less that half a circle!")
+        raise Exception("visual extent of a cell should always be less that half a circle!")
     return (leftmost, rightmost)
 
 # Visual arc, a range not obscured by shadow

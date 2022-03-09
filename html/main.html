@@ -5,16 +5,13 @@
 <body>
 	<h2>Hex Web</h2>
 	<textarea id="text" cols="80" rows="10" readonly></textarea>
-	<!--<button style="position: absolute; right: 0; bottom: 0" onclick="text_to_bottom()">&#10515;</button>-->
-	<div id="arena" style="border:1px solid black; overflow:auto; width:400px; height:300px; position:relative;"></div>
+	<canvas id="arena" width="400" height="307" style="border:1px solid black; display: block; width:400px; height:307px; image-rendering: pixelated; image-rendering: crisp-edges;"></canvas>
 	<div id="status"></div>
 	<form id="form" autocomplete="off">
 		<input id="input" size="80">
 		<input type="submit" value="->">
 	</form>
 </body>
-
-
 
 <script type="text/javascript" src="js/main.js"></script>
 </html>
