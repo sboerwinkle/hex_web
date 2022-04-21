@@ -23,14 +23,14 @@ class SalvageGame(Game):
                 SpriteEnt("grass", self)._move((x,y))
         for o in options.values():
             o.handler(self, o.default)
-        self.phase = init_phase
-        self.step_complete()
+        self.phase_armed = False
+        self.new_phase(init_phase)
     def seat_player(self, player):
         for c in self.characters:
             if c.abandoned_name == player.name:
                 c.set_player(player)
                 return
-        player.whisper_raw(f">>> Welcome!")
+        player.whisper_raw(f">>> Welcome {player.name}!")
         self.characters.append(SalvageCharacter(self, player))
     def process_command(self, char, cmd):
         bits = cmd.split()
@@ -41,16 +41,23 @@ class SalvageGame(Game):
             char.rm_selected()
         elif bits[0] == '/eye':
             char.toggle_eye()
-        elif bits[0] == '/home':
-            char.path_home()
         elif bits[0] == '/step':
             char.manual_step(int(bits[1]))
+        elif bits[0] == '/vote':
+            char.vote(bits[1])
         elif bits[0] == '/clear':
             char.clear_steps()
         elif bits[0] == '/done':
-            self.complete_phase()
+            self.phase_armed = True
         else:
             super().process_command(char, cmd)
+            return
+        for _ in range(5):
+            if not self.phase_armed:
+                return
+            self.phase_armed = False
+            self.complete_phase()
+        self.lobby.broadcast("5x phases occurred in rapid succession, aborting to prevent loop")
     def step_complete(self):
         self.visible_spaces = {}
         for c in self.characters:
@@ -65,22 +72,36 @@ class SalvageGame(Game):
         self.ready_units = set()
         self.reqd_units = set()
         self.reqd_units = phase.reqd_units(self) #Should probably also update units with what their requirement is
-        if (len(self.reqd_units) == 0):
+        if len(self.reqd_units) == 0:
             # Hopefully this doesn't result in *too* much recursion, hahaha...
-            self.resolve_phase()
-            return
+            phase.all_ready(self)
         self.step_complete()
     def complete_phase(self):
         self.new_phase(self.phase.complete(self))
     def update_unit_readiness(self, unit, ready):
         if not ready:
-            self.ready_units.remove(unit)
+            try:
+                self.ready_units.remove(unit)
+            except KeyError:
+                pass
             return
         if unit not in self.reqd_units:
             raise Exception("Unit readied up, but isn't required for this phase!");
         self.ready_units.add(unit)
         if len(self.ready_units) == len(self.reqd_units):
-            self.complete_phase()
+            self.phase.all_ready(self)
+    def readiness_watch(self, e):
+        # TODO this is really just watching for destruction,
+        # watcher system might need a lil rework
+        if e.pos is None:
+            try:
+                self.reqd_units.remove(e)
+                self.ready_units.remove(e)
+            except KeyError:
+                pass
+            if len(self.reqd_units) == len(self.ready_units):
+                self.phase.all_ready(self)
+            e.rm_watcher(self.readiness_watch)
 
     def add_visible_spaces(self, spaces):
         d = self.visible_spaces
@@ -195,15 +216,24 @@ class SalvageCharacter(Character):
             for e in c.eyeballs:
                 for p, d in e.path:
                     out_board.require_tile(p).add(f"hex_arrow_{d}")
+        for e in self.game.reqd_units.difference(self.game.ready_units):
+            out_board.require_tile(e.pos).add("hex_select_2")
         status_line = '{Complete|/done}'
-        if self.selected is not None:
-            out_board.require_tile(self.selected.pos).add("hex_select")
-            for p, _ in self.selected.path:
+        s = self.selected
+        if s is not None:
+            out_board.require_tile(s.pos).add("hex_select")
+            status_line += ' {Remove|/rm}'
+            for p, _ in s.path:
                 # Originally I was going to outline the path arrows of
                 # the selected person, but that's like 6 more sprites
                 # and I don't wanna draw those.
                 out_board.require_tile(p).add("hex_select")
-            status_line += ' {Remove|/rm} {Return|/home}'
+            if s.move_reqd:
+                status_line += ' {Return|/clear}'
+            if s.vote_options is not None:
+                for o in s.vote_options:
+                    emoji = "\u2705" if s.vote == o else "\u274e"
+                    status_line += ' {[' + o + ']' + emoji + '|/vote ' + o + '}'
         elif self.mode == MODE_DEFAULT:
             status_line += ' {Place Eye|/eye}'
         else:
@@ -243,12 +273,12 @@ class SalvageCharacter(Character):
             if pos == s.pos:
                 # Just deselect, don't need to update everyone
                 self.step_complete()
-            else:
-                s.path = update_path(s.pos, s.path, MAX_PATH, pos, self.game.plannable)
-                self.game.step_complete()
-            # TODO This might trigger an additional client frame, making the previous one unnecessary. Oh well?
-            if s.move_reqd:
-                self.game.update_unit_readiness(s, True)
+                return
+        if s is not None and s.move_reqd:
+            s.path = update_path(s.pos, s.path, MAX_PATH, pos, self.game.plannable)
+            self.game.update_unit_readiness(s, True)
+            # TODO Should this "arm" a step_complete instead, what with potentially doing multiple per turn?
+            self.game.step_complete()
         else:
             for e in tile.contents:
                 if isinstance(e, Eyeball):
@@ -282,15 +312,18 @@ class SalvageCharacter(Character):
         if self.selected is None:
             raise PebkacException("Nothing selected, cannot clear!")
         self.selected.path = []
+        if self.selected.move_reqd:
+            # Clearing toggles readiness
+            self.game.update_unit_readiness(self.selected, self.selected not in self.game.ready_units)
         self.game.step_complete()
-    def path_home(self):
+    def vote(self, ballot):
         s = self.selected
         if s is None:
-            raise PebkacException("Nothing selected, cannot go home!")
-        self.selected = None
-        s.rm_watcher(self.select_watch)
-        s.path = update_path(s.pos, s.path, MAX_PATH, s.pos, self.game.plannable)
-        self.game.step_complete()
+            raise PebkacException("Nothing selected, cannot vote!")
+        s.vote = ballot if ballot != s.vote else None
+        if s.vote_options != None:
+            self.game.update_unit_readiness(s, s.vote is not None)
+        self.step_complete()
     def rm_selected(self):
         if self.selected is None:
             raise PebkacException("Nothing selected, cannot remove!")
@@ -307,24 +340,31 @@ class Eyeball(WatchedEnt, SpriteEnt):
         self.vote_options = None
         self.vote = None
         super().__init__('hex_eye', *a, **ka)
+        self.add_watcher(self.game.readiness_watch)
 
 ## Phases (mostly this is the larger-scale game logic)
 
 # Surely python has a better solution than these wacky singletons?
 
-class VoteyPhase:
+class Phase:
+    def all_ready(self, game):
+        game.phase_armed = True
+
+class VoteyPhase(Phase):
     def reqd_units(self, game):
         result = set()
         for c in game.characters:
             result.update(c.eyeballs)
             for e in c.eyeballs:
                 e.vote = None
-                e.vote_options = ['Yes', 'No']
+                e.vote_options = ['Yes', 'No', 'Pass']
         return result
     def complete(self, game):
+        empty = True
         d = 0
         for c in game.characters:
             for e in c.eyeballs:
+                empty = False
                 if e.vote == 'Yes':
                     d += 1
                 elif e.vote == 'No':
@@ -338,10 +378,13 @@ class VoteyPhase:
         else:
             result = "'No' wins"
         game.lobby.broadcast(result)
-        return movey_phase
+        if empty:
+            return init_phase
+        else:
+            return movey_phase
 votey_phase = VoteyPhase()
 
-class MoveyPhase:
+class MoveyPhase(Phase):
     def reqd_units(self, game):
         result = set()
         for c in game.characters:
@@ -358,9 +401,12 @@ class MoveyPhase:
         return votey_phase
 movey_phase = MoveyPhase()
 
-class InitPhase:
+class InitPhase(Phase):
+    def all_ready(self, game):
+        pass
     def reqd_units(self, game):
-        raise Exception("InitPhase should never be transitioned to!")
+        game.lobby.broadcast("Create a unit and click 'Complete' to begin.")
+        return set()
     def complete(self, game):
         game.lobby.broadcast("Game begins.")
         return votey_phase
