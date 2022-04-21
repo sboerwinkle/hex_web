@@ -23,6 +23,7 @@ class SalvageGame(Game):
                 SpriteEnt("grass", self)._move((x,y))
         for o in options.values():
             o.handler(self, o.default)
+        self.phase = init_phase
         self.step_complete()
     def seat_player(self, player):
         for c in self.characters:
@@ -47,7 +48,7 @@ class SalvageGame(Game):
         elif bits[0] == '/clear':
             char.clear_steps()
         elif bits[0] == '/done':
-            self.run_paths()
+            self.complete_phase()
         else:
             super().process_command(char, cmd)
     def step_complete(self):
@@ -55,6 +56,32 @@ class SalvageGame(Game):
         for c in self.characters:
             c.do_los()
         super().step_complete()
+
+    def new_phase(self, phase):
+        # TODO: This function might have recursion problems;
+        #       right now it's avoided since basically every phase is going to get hung up on player input
+        #       (and there aren't any AI to render decisions before `reqd_units` is updated)
+        self.phase = phase
+        self.ready_units = set()
+        self.reqd_units = set()
+        self.reqd_units = phase.reqd_units(self) #Should probably also update units with what their requirement is
+        if (len(self.reqd_units) == 0):
+            # Hopefully this doesn't result in *too* much recursion, hahaha...
+            self.resolve_phase()
+            return
+        self.step_complete()
+    def complete_phase(self):
+        self.new_phase(self.phase.complete(self))
+    def update_unit_readiness(self, unit, ready):
+        if not ready:
+            self.ready_units.remove(unit)
+            return
+        if unit not in self.reqd_units:
+            raise Exception("Unit readied up, but isn't required for this phase!");
+        self.ready_units.add(unit)
+        if len(self.ready_units) == len(self.reqd_units):
+            self.complete_phase()
+
     def add_visible_spaces(self, spaces):
         d = self.visible_spaces
         for (k, v) in spaces:
@@ -127,7 +154,6 @@ class SalvageGame(Game):
             for person, _ in destinations[d]:
                 person._move(d)
                 person.path = []
-        self.step_complete()
 
 options = {}
 """
@@ -220,6 +246,9 @@ class SalvageCharacter(Character):
             else:
                 s.path = update_path(s.pos, s.path, MAX_PATH, pos, self.game.plannable)
                 self.game.step_complete()
+            # TODO This might trigger an additional client frame, making the previous one unnecessary. Oh well?
+            if s.move_reqd:
+                self.game.update_unit_readiness(s, True)
         else:
             for e in tile.contents:
                 if isinstance(e, Eyeball):
@@ -273,5 +302,66 @@ class SalvageCharacter(Character):
 
 class Eyeball(WatchedEnt, SpriteEnt):
     def __init__(self, *a, **ka):
+        self.move_reqd = False
         self.path = []
+        self.vote_options = None
+        self.vote = None
         super().__init__('hex_eye', *a, **ka)
+
+## Phases (mostly this is the larger-scale game logic)
+
+# Surely python has a better solution than these wacky singletons?
+
+class VoteyPhase:
+    def reqd_units(self, game):
+        result = set()
+        for c in game.characters:
+            result.update(c.eyeballs)
+            for e in c.eyeballs:
+                e.vote = None
+                e.vote_options = ['Yes', 'No']
+        return result
+    def complete(self, game):
+        d = 0
+        for c in game.characters:
+            for e in c.eyeballs:
+                if e.vote == 'Yes':
+                    d += 1
+                elif e.vote == 'No':
+                    d -= 1
+                e.vote = None
+                e.vote_options = None
+        if d == 0:
+            result = "It's a tie!"
+        elif d > 0:
+            result = "'Yes' wins"
+        else:
+            result = "'No' wins"
+        game.lobby.broadcast(result)
+        return movey_phase
+votey_phase = VoteyPhase()
+
+class MoveyPhase:
+    def reqd_units(self, game):
+        result = set()
+        for c in game.characters:
+            result.update(c.eyeballs)
+            for e in c.eyeballs:
+                e.path = []
+                e.move_reqd = True
+        return result
+    def complete(self, game):
+        for c in game.characters:
+            for e in c.eyeballs:
+                e.move_reqd = False
+        game.run_paths()
+        return votey_phase
+movey_phase = MoveyPhase()
+
+class InitPhase:
+    def reqd_units(self, game):
+        raise Exception("InitPhase should never be transitioned to!")
+    def complete(self, game):
+        game.lobby.broadcast("Game begins.")
+        return votey_phase
+init_phase = InitPhase()
